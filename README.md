@@ -1,272 +1,200 @@
 # HIRAM
 
-An autonomous multi-agent system that manages a portfolio of online services. HIRAM orchestrates a hierarchy of AI agents — each with distinct roles, tools, and constraints — to research, build, deploy, price, document, and monitor web products without human intervention.
+**An autonomous multi-agent daemon that turns high-level business directives into deployed products.** Give it a one-paragraph policy — *"build 5 document-generation websites"* — and it decomposes the objective into a JIRA project, researches the market, writes the code, deploys to cloud infrastructure, configures payments, and sends a launch email. No human in the loop.
 
-**This is a research project** exploring the boundaries of what autonomous agent systems can achieve when given real infrastructure access: production APIs, payment processing, DNS, cloud compute, and project management boards.
+In a [23-minute E2E test run](RESULTS.md), HIRAM autonomously created a JIRA project with 23 tickets, researched competitor pricing across 5 verticals, saved 13 institutional knowledge entries, and launched 5 parallel code-generation workers — spending $7.27 with an 89% prompt cache hit rate — before the test environment ran out of memory.
 
-## What it does
+This is a research project exploring the practical limits of LLM-based multi-agent coordination against real infrastructure.
 
-Given a high-level directive (a "policy") like *"Build and launch 5 document-generation websites"*, HIRAM:
+---
 
-1. **Decomposes** the objective into a JIRA project with epics, stories, and dependency chains
-2. **Researches** the market — competitor pricing, API capabilities, technical feasibility
-3. **Builds** full-stack web applications via Claude Code, pushes to GitHub
-4. **Deploys** to Google Cloud Run, configures DNS via Cloudflare
-5. **Prices** products competitively on Stripe
-6. **Documents** the work in Google Docs/Sheets
-7. **Communicates** launch summaries via email
-8. **Monitors** deployed services for uptime and cost anomalies
+## How it works
 
-All orchestrated by a hierarchy of agents that coordinate through JIRA tickets, enforce dependency ordering, and self-heal on failures.
-
-## Architecture overview
-
-```
-                    ┌──────────────┐
-                    │   Policies   │  ← Strategic directives from the operator
-                    └──────┬───────┘
-                           │
-                    ┌──────▼───────┐
-                    │  Architect   │  ← Opus 4.6 — decomposes policies into
-                    │  (singleton) │    JIRA epics/stories with dependencies
-                    └──────┬───────┘
-                           │
-              ┌────────────┼────────────┐
-              │            │            │
-        ┌─────▼────┐ ┌────▼─────┐ ┌────▼─────┐
-        │  Dev      │ │  Ops     │ │ Research │  ← Wardens: concurrent ticket
-        │  Warden   │ │  Warden  │ │ Warden   │    coordinators (dynamic)
-        └─────┬─────┘ └────┬─────┘ └────┬─────┘
-              │            │            │
-         ┌────▼────┐  ┌───▼────┐  ┌───▼────────┐
-         │Developer│  │Deployer│  │ Researcher  │  ← Workers: task executors
-         │ Worker  │  │ Worker │  │   Worker    │    (one per JIRA ticket)
-         └─────────┘  └────────┘  └─────────────┘
-
-  Singletons: Treasurer (Stripe), Secretary (Google Workspace), Expert (self-improvement)
-```
-
-**Key design decisions:**
-
-- **Opus for the Architect, Sonnet for workers.** The Architect makes strategic decisions (decomposing objectives, dependency ordering, warden management) where reasoning quality matters most. Workers execute bounded tasks where speed and cost efficiency matter. This is a deliberate cost/quality tradeoff — see [ARCHITECTURE.md](ARCHITECTURE.md) for the full rationale.
-
-- **JIRA as the coordination substrate.** Rather than custom task queues, agents coordinate through JIRA tickets. This gives full observability (you can watch the board in real-time), provides a natural audit trail, and means humans can intervene by editing tickets. The tradeoff is latency — JIRA API calls are slower than in-memory queues — but for a system that runs tasks measured in minutes, this is acceptable.
-
-- **Mechanical dependency enforcement.** Agents don't decide when to start work on dependent tasks — the system mechanically blocks tickets until their dependencies complete, then transitions them to "To Do" and triggers warden rehydration. This removes an entire class of ordering bugs that would be fragile if left to LLM judgment.
-
-- **MCP (Model Context Protocol) for all tool access.** Every external integration (JIRA, Cloudflare, Stripe, Google Workspace, GitHub) is a standalone MCP server that agents access through a unified `plugin_invoke()` interface. Agents don't need to know HTTP, auth headers, or API versions — they just call tools by name with JSON arguments.
-
-## Prerequisites
-
-- **Node.js 22+** (ES modules, native fetch)
-- **Redis** (job queue, rate limiting, caching)
-- **Anthropic API key** with access to Claude Sonnet 4.6 and Opus 4.6
-- **JIRA Cloud** account (free tier works) — the coordination substrate
-- **GitHub** account + PAT — where agents push code
-
-Optional (for full functionality):
-- Cloudflare account — DNS, Workers, Tunnel for webhook delivery
-- Google Cloud Platform — Cloud Run deployments, Google Workspace (Gmail, Drive, Docs)
-- Stripe — payment processing
-- Voyage AI — knowledge store embeddings
-- Telegram bot — operator notifications
-
-## Quick start
-
-```bash
-# Clone
-git clone https://github.com/Maelhann/hiram.git
-cd hiram
-
-# Install
-npm install
-
-# Configure
-cp .env.example .env
-# Edit .env — at minimum set ANTHROPIC_API_KEY, HIRAM_MASTER_KEY,
-# and VAULT_ATLASSIAN_* for JIRA access.
-
-# Build
-npm run build
-
-# Start
-npm start
-```
-
-On first boot, HIRAM runs a 14-step initialization sequence:
-
-1. Configuration loading
-2. SQLite database initialization (WAL mode, FTS5)
-3. Core services (Redis, Vault, Knowledge Store, Telemetry)
-4. Vault secret seeding from `VAULT_*` environment variables
-5. Git + GitHub CLI configuration
-6. Workspace directory creation
-7. Agent wiring (Architect, Wardens, Treasurer, Secretary, Expert)
-8. MCP plugin compilation and connection
-9. Health check across all integrations
-10. Tool runway verification (smoke tests for each plugin)
-11. Webhook listener registration
-12. Cloudflare Tunnel startup
-13. Service startup (HTTP server, wardens, supervisor, scheduler)
-14. Ready
-
-## Giving HIRAM work
-
-HIRAM takes direction through **policies** — high-level strategic directives stored in the database. The Architect reads policies and decomposes them into actionable work.
-
-You can create policies through the Telegram bot interface, the CLI server, or directly in the E2E test harness:
+HIRAM runs as a long-lived daemon. You give it a **policy** (a strategic directive), and the system does the rest:
 
 ```typescript
+// This is the entire human input. Everything below happens autonomously.
 ctx.policyStore.create({
-  title: 'Build a status page SaaS product',
-  description: `Research the market, build a web app for monitoring uptime,
-    deploy to Cloud Run, set up Stripe pricing, write docs, send launch email.`,
+  title: 'Ordo DocGen Network — 5 vertical document-generation websites',
+  description: `Build LegalDraft, InvoiceForge, PropDocs, EduCert, HRPapers.
+    Research competitors, build with Ordo Studio API, deploy to Cloud Run,
+    price on Stripe, document in Google Docs, send launch email.`,
   priority: 'critical',
   createdBy: 'founder',
 });
-
-await ctx.architect.handleInstruction(
-  'There is a new CRITICAL policy. Read it, create a JIRA project, ' +
-  'break it into epics and stories, and start immediately.'
-);
 ```
 
-The Architect then:
-1. Creates a dedicated JIRA project (e.g., key `PULSE` for "PulseCheck")
-2. Creates epics for each major work stream
-3. Creates stories with dependency chains (Research → Build → Deploy → Verify → Communicate)
-4. Labels each story for the right warden (`warden:dev`, `warden:ops`, `warden:research`, etc.)
-5. Wardens pick up stories and spawn workers to execute them
+**What happens next (no human intervention):**
+
+1. The **Architect** (Opus 4.6) reads the policy, creates JIRA project `ODGEN`, decomposes it into 7 epics and 16 stories with explicit dependency chains
+2. **Research wardens** pick up research stories, run web searches, analyze competitor pricing across all 5 verticals, save findings to the knowledge store
+3. When research completes, the dependency pipeline mechanically unblocks build stories
+4. **Dev wardens** spawn 5 parallel workers that create GitHub repos, scaffold apps via Claude Code, write code, run tests, and push
+5. When builds complete, **ops wardens** deploy to Cloud Run, configure Cloudflare DNS
+6. The **Treasurer** sets up Stripe products with competitive pricing (informed by research findings)
+7. The **Secretary** sends a launch summary email
+
+All coordination happens through JIRA tickets. You can watch it in real-time on the board.
+
+## Architecture
+
+```
+                         ┌──────────────┐
+                         │   Policies   │   "Build 5 doc-gen websites"
+                         └──────┬───────┘
+                                │
+                         ┌──────▼───────┐
+                         │  Architect   │   Opus 4.6 — strategic planning
+                         │  (singleton) │   Creates JIRA projects, epics, stories
+                         └──────┬───────┘
+                                │
+           ┌────────────────────┼────────────────────┐
+           │                    │                     │
+     ┌─────▼─────┐       ┌─────▼─────┐        ┌─────▼──────┐
+     │    Dev     │       │    Ops    │        │  Research   │   Wardens: pick up
+     │   Warden   │       │   Warden  │        │   Warden   │   JIRA stories by label,
+     └─────┬─────┘       └─────┬─────┘        └─────┬──────┘   spawn workers
+           │                    │                     │
+      ┌────▼─────┐       ┌─────▼─────┐        ┌─────▼───────┐
+      │Developer │       │ Deployer  │        │ Researcher  │   Workers: one per
+      │  Worker  │       │  Worker   │        │   Worker    │   ticket, runs to
+      └──────────┘       └───────────┘        └─────────────┘   completion
+
+  Singletons: Treasurer (Stripe) · Secretary (Google Workspace) · Expert (self-improvement)
+```
+
+### Why this hierarchy?
+
+**Opus for planning, Sonnet for execution.** The Architect makes 13 API calls to plan an entire project — the cost difference between Opus and Sonnet for 13 calls is negligible. But the quality difference in decomposition, dependency ordering, and label assignment is significant. Workers make hundreds of calls — Sonnet's speed and cost efficiency matters there.
+
+**JIRA as coordination substrate.** Agents coordinate through JIRA tickets instead of custom task queues. This gives observability (watch the board live), auditability (every decision has a comment), and human override (edit any ticket to redirect work). The tradeoff is API latency — acceptable for tasks measured in minutes.
+
+**Mechanical dependency enforcement.** Early versions relied on the Architect to notice when dependencies completed. This was unreliable — the LLM would sometimes forget. The current system mechanically blocks tickets until predecessors reach Done status, then transitions dependents and triggers warden rehydration. Deterministic decisions should be code, not prompts.
+
+## Prompt engineering
+
+The prompts are the most important code in HIRAM. Every constraint exists because something broke without it. Six principles, each learned from real failures:
+
+| Principle | What it says | What broke without it |
+|-----------|-------------|----------------------|
+| **Agents must act, not describe** | *"NEVER just describe what should be done — DO it by calling tools."* | Agents produced beautiful analysis then stopped |
+| **Scope boundaries** | *"Your job ends at git push. Do NOT deploy."* | Dev workers ran `gcloud deploy`, doing ops work |
+| **Explicit tool signatures** | *"`issueKey` NOT `issue_key`"* with exact examples | Agents hallucinated parameter names constantly |
+| **Research limits** | *"Max 5 web searches. Once you have enough, STOP."* | Research workers explored tangents indefinitely, burning thousands of tokens |
+| **Structured output** | Every worker type specifies exact JSON output format | Downstream consumers couldn't parse freeform responses |
+| **Debugging workflow** | 6-step diagnostic process spelled out | Workers retried the same failing command 8 times without diagnosing |
+
+See [ARCHITECTURE.md](ARCHITECTURE.md) for the full rationale behind each decision, with the failure stories that motivated them.
+
+## E2E test results
+
+The system is tested against real infrastructure. The E2E test creates a policy, lets HIRAM run autonomously, and records every API call and tool execution.
+
+**Latest run** ([full results](RESULTS.md)):
+
+| Metric | Value |
+|--------|-------|
+| Duration | 23 min (terminated by OOM in test environment) |
+| Cost | $7.27 |
+| API calls | 302 (13 Opus, 289 Sonnet) |
+| Tool executions | 443 (4.7% error rate, all recovered) |
+| Prompt cache hit rate | 89% |
+| JIRA tickets created | 23 (7 epics + 16 stories) |
+| Knowledge entries saved | 13 (competitor pricing, API research) |
+| Peak concurrency | 12 tickets worked simultaneously |
+
+The research phase completed fully — competitor pricing for all 5 verticals was analyzed, a cross-vertical market gap was identified autonomously (*"no competitor offers usage-based per-document API pricing"*), and the build phase was running 5 parallel code-generation workers when the test environment hit memory limits.
+
+## Resilience
+
+HIRAM runs for hours without supervision. Every failure mode observed during E2E testing has a corresponding mitigation:
+
+```
+Circuit breaker     ─── 5 consecutive API failures → 60s backoff for all agents
+Token budget        ─── Hard cap per run (32k) and per ticket → prevents cost spirals
+Context compaction  ─── Proactive message summarization at 70% budget → preserves context
+Max_tokens circuit  ─── 2 consecutive truncations → force wrap-up → prevents output loops
+Model fallback      ─── 3 consecutive 529s → Sonnet falls back to Haiku → stays running
+Streaming API       ─── messages.stream().finalMessage() → avoids 10-min SDK timeout
+Dependency checks   ─── Mechanical block/unblock → deterministic pipeline ordering
+Self-healing        ─── EPIPE/ECONNRESET caught → plugin reconnect loop handles recovery
+```
+
+## Tool integration (MCP)
+
+Four custom MCP servers, 58 tools total. Each is a standalone TypeScript file compiled via esbuild and connected over stdio:
+
+| Plugin | Tools | What it does |
+|--------|-------|-------------|
+| **atlassian** | 10 | JIRA: search, create, get, update, delete, comment, transitions, projects |
+| **cloudflare** | 24 | DNS, KV namespaces, R2 storage, Workers, Pages, D1 databases, Registrar, Tunnels |
+| **google-workspace** | 17 | Gmail, Calendar, Drive, Docs, Contacts with domain-wide delegation |
+| **developer-tools** | 7 | Claude Code integration, shell execution, git operations |
+
+These replaced third-party MCP packages that had auth issues and parameter mismatches. Building custom servers with exactly the tools agents need — and error messages agents can act on — took less time than debugging third-party code.
 
 ## Project structure
 
 ```
 src/
 ├── daemon.ts                  # Entry point — 14-step boot sequence
-├── config.ts                  # Environment-based configuration with hot-reload
 ├── workers/
-│   ├── base-agent.ts          # Core agentic loop: send → tool_use → execute → repeat
-│   ├── base-warden.ts         # Concurrent ticket coordinator with dependency enforcement
+│   ├── base-agent.ts          # Core agentic loop with all resilience patterns
+│   ├── base-warden.ts         # Concurrent ticket coordinator + dependency enforcement
 │   ├── architect.ts           # Strategic orchestrator (Opus 4.6)
+│   ├── worker-types.ts        # System prompts for 19 worker specializations
 │   ├── secretary.ts           # Google Workspace operations
 │   ├── treasurer.ts           # Stripe financial operations
-│   ├── expert.ts              # Self-improvement — modifies HIRAM's own code
-│   ├── warden-registry.ts     # Dynamic warden lifecycle management
-│   └── worker-types.ts        # System prompts for all 19 worker types
+│   ├── expert.ts              # Self-modification agent
+│   └── warden-registry.ts     # Dynamic warden lifecycle
 ├── tools/
-│   ├── registry.ts            # MCP plugin registry (compile, connect, invoke)
-│   ├── meta-tools.ts          # Agent tool definitions (plugin_invoke, shell_exec, etc.)
-│   ├── seeds/                 # MCP server source code (TypeScript → esbuild → stdio)
-│   │   ├── jira-tools.ts      # JIRA REST API (search, create, transition, comment)
-│   │   ├── cloudflare-tools.ts# Cloudflare API (DNS, KV, R2, Workers, Tunnels)
-│   │   ├── google-workspace-tools.ts  # Gmail, Calendar, Drive, Docs, Contacts
-│   │   └── developer-tools.ts # Claude Code integration, shell, git
-│   ├── health-check.ts        # Integration health verification
-│   └── runway.ts              # Tool smoke tests on boot
+│   ├── registry.ts            # MCP plugin registry (compile → connect → invoke)
+│   ├── meta-tools.ts          # Agent-facing tool definitions
+│   └── seeds/                 # MCP server source (JIRA, Cloudflare, Google, Dev)
 ├── resilience/
-│   ├── circuit-breaker.ts     # API circuit breaker (5 failures → 60s backoff)
-│   ├── token-budget.ts        # Per-run and per-ticket token spend limits
+│   ├── circuit-breaker.ts     # Shared API circuit breaker
+│   ├── token-budget.ts        # Per-run and per-ticket spend limits
 │   ├── retry-policy.ts        # Exponential backoff with error classification
-│   └── context-compactor.ts   # Message compression for long conversations
-├── knowledge/
-│   └── store.ts               # Persistent institutional memory with Voyage AI embeddings
-├── secrets/
-│   └── vault.ts               # AES-256-GCM encrypted secret storage
-├── events/
-│   └── bus.ts                 # Webhook/cron/poll event intake with fan-out delivery
-├── jira/
-│   └── webhook-server.ts      # HTTP listener for JIRA events
-├── policy/
-│   └── store.ts               # Strategic directive management
-├── hooks/
-│   ├── hook-engine.ts         # Pre/post-execution hooks for safety and audit
-│   └── safety-hooks.ts        # Cost limits, resource guards
-├── telemetry/
-│   └── collector.ts           # Prometheus metrics (API calls, tokens, errors)
-└── messaging/
-    └── gateway.ts             # Telegram + email routing
+│   └── context-compactor.ts   # Conversation compression
+├── knowledge/store.ts         # Persistent memory with Voyage AI embeddings
+├── secrets/vault.ts           # AES-256-GCM encrypted storage
+├── events/bus.ts              # Webhook/cron/poll event fan-out
+├── jira/webhook-server.ts     # HTTP listener for JIRA events
+├── hooks/                     # Pre/post-execution safety hooks
+└── telemetry/collector.ts     # Prometheus metrics
+
+tests/
+├── unit/          (18 tests)  # No external dependencies
+├── integration/   (4 tests)   # Real JIRA API calls
+├── scenarios/     (7 tests)   # Multi-agent coordination
+└── e2e/           (3 tests)   # Full autonomous runs, 1-3 hours each
 ```
 
-## Testing
+## Quick start
 
 ```bash
-# Unit tests (no external dependencies)
-npm test
-
-# Integration tests (requires JIRA credentials in .env)
-npm test -- --config vitest.config.ts tests/integration/
-
-# E2E tests (requires all credentials, real Claude API, 1-3 hours)
-npm run test:e2e
+git clone https://github.com/Maelhann/hiram.git && cd hiram
+npm install
+cp .env.example .env   # Set ANTHROPIC_API_KEY, HIRAM_MASTER_KEY, VAULT_ATLASSIAN_*
+npm run build && npm start
 ```
 
-The E2E tests are the most interesting — they create a real policy, let the system run autonomously for up to 3 hours, then verify the results (JIRA tickets created, websites deployed, etc.). They record every API call and tool execution to a SQLite database for post-run analysis.
+## Research questions
 
-## How the agent loop works
+HIRAM is an exploration of practical questions in autonomous agent systems:
 
-Every agent in HIRAM — from the Architect down to individual workers — shares the same core loop implemented in `base-agent.ts`:
+- **Prompt engineering as architecture.** HIRAM uses no fine-tuned models, no RAG, no vector databases for agent coordination. The prompts are the architecture — 19 worker type definitions, each evolved through failure analysis. Can prompt engineering alone handle complex multi-agent coordination? The E2E results suggest yes, but the prompts must be treated as code: versioned, tested, and evolved from observed failures.
 
-```
-┌─────────────────────────────────────────────────┐
-│                  Agentic Loop                    │
-│                                                  │
-│  1. Send system prompt + conversation to Claude  │
-│  2. If response contains tool_use blocks:        │
-│     a. Execute each tool (with pre/post hooks)   │
-│     b. Return tool_results to Claude             │
-│     c. Go to 1                                   │
-│  3. If end_turn: done                            │
-│  4. If max_tokens: compact context + redirect    │
-│                                                  │
-│  Safety rails at every step:                     │
-│  • Circuit breaker (5 consecutive API failures)  │
-│  • Token budget (per-run: 32k, escalated: 64k)   │
-│  • Context compaction (70% threshold)            │
-│  • Max_tokens spiral detection (2 consecutive)   │
-│  • Model fallback (Sonnet → Haiku after 3× 529) │
-│  • Abort signal propagation                      │
-│  • Pre/post hooks (safety, audit, cost limits)   │
-└─────────────────────────────────────────────────┘
-```
+- **LLM judgment vs. mechanical enforcement.** The dependency pipeline went through three iterations. v1 relied entirely on LLM reasoning (unreliable). v2 added mechanical blocking but relied on LLMs for unblocking (partially worked). v3 is fully mechanical with LLM oversight (current, reliable). The general lesson: use LLMs for decisions that benefit from reasoning, code for decisions that must be deterministic.
 
-See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed rationales behind each design decision.
+- **Cost control at scale.** A single stuck agent can burn $50+ in minutes. HIRAM's multi-layered approach (token budgets → max_tokens detection → context compaction → model fallback) evolved from real cost incidents during testing. Each layer exists because the layers below it weren't sufficient alone. The 89% prompt cache hit rate is the single biggest cost optimization — see [RESULTS.md](RESULTS.md) for the economics.
 
-## Resilience patterns
-
-HIRAM is designed to run for hours without supervision. Several patterns make this possible:
-
-| Pattern | What it does | Why |
-|---------|-------------|-----|
-| **Circuit breaker** | After 5 consecutive API failures, stops all agent calls for 60s | Prevents cascading failures when Anthropic API has transient issues |
-| **Token budget** | Hard cap on tokens per run (32k default, 64k escalated) and per ticket | Prevents runaway costs from agents stuck in loops |
-| **Context compaction** | Proactively summarizes old messages when approaching budget | Lets agents have long conversations without losing context |
-| **Max_tokens circuit-break** | After 2 consecutive truncated responses, forces wrap-up | Prevents infinite text generation loops that waste tokens |
-| **Model fallback** | Switches from Sonnet to Haiku after 3 consecutive 529s | Keeps the system running during capacity constraints |
-| **Exponential backoff** | Retries transient errors with increasing delays | Handles API rate limits and temporary outages gracefully |
-| **Streaming API** | Uses `messages.stream().finalMessage()` for all API calls | Avoids Anthropic SDK's 10-minute non-streaming timeout |
-| **Dependency enforcement** | Mechanically blocks tickets until dependencies complete | Eliminates ordering bugs from LLM reasoning |
-
-## Observability
-
-- **JIRA board** — real-time view of all agent work (tickets, statuses, comments)
-- **Prometheus metrics** — API calls, token spend, error rates, agent lifecycle events
-- **Grafana dashboard** — pre-built dashboard for all metrics (see `deploy/grafana-dashboard.json`)
-- **Telegram bot** — operator notifications and interactive commands
-- **Knowledge store** — persistent institutional memory across runs
-- **E2E transcript recording** — every API call and tool execution logged to SQLite
-
-## Research context
-
-HIRAM is an exploration of several open questions in autonomous agent systems:
-
-1. **How far can prompt engineering take you?** HIRAM uses no fine-tuned models, no RAG pipelines, no vector databases for agent memory. Everything runs on prompt engineering — carefully crafted system prompts with explicit instructions, constraints, and output formats. The results suggest that prompt architecture is sufficient for complex multi-agent coordination, but the prompts must be treated as code: versioned, tested, and evolved based on failure analysis.
-
-2. **What's the right coordination substrate?** Rather than building custom task queues, HIRAM uses JIRA as the shared state between agents. This gives full observability and human-in-the-loop capability for free, at the cost of API latency. The tradeoff is worth it for a system where tasks take minutes, not milliseconds.
-
-3. **Where should you trust LLM judgment vs. mechanical enforcement?** HIRAM's dependency pipeline is a case study: early versions relied on the Architect to notice when dependencies completed and unblock downstream work. This was unreliable. The current version uses mechanical enforcement (parse dependency text → check status → transition) with the Architect as a strategic overlay. The lesson: use LLMs for decisions that benefit from reasoning, use code for decisions that must be deterministic.
-
-4. **How do you prevent cost spirals?** An agent stuck in a loop can burn through API credits in minutes. HIRAM's multi-layered approach (token budgets, max_tokens circuit-breaking, context compaction, model fallback) evolved from real incidents during E2E testing. Each layer exists because the layers below it weren't sufficient alone.
+- **Observability as a feature.** Using JIRA as the coordination substrate means every agent decision is visible as a ticket, comment, or status transition. This turned out to be the most valuable architectural decision for debugging — you can trace exactly why an agent made a choice by reading its JIRA comments.
 
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+---
+
+*Built with [Claude](https://anthropic.com/claude) — Opus 4.6 for orchestration, Sonnet 4.6 for execution, and the [Anthropic SDK](https://github.com/anthropics/anthropic-sdk-node) + [Model Context Protocol](https://modelcontextprotocol.io/) for tool integration.*
