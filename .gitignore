@@ -1,0 +1,48 @@
+node_modules/
+dist/
+data/
+backups/
+.env
+*.tsbuildinfo
+
+# Credentials — never commit
+deploy/seed-vault.sh
+*.json.key
+*.pem
+*.p12
+
+# GCP service account files
+hiram-*.json
+firebase-mcp.json
+
+# Test artifacts
+test-output.log
+tests/test-*-output.log
+tests/test-run-output.log
+test-transcripts/
+e2e-latest.db
+
+# Playwright browser cache
+.playwright-mcp/
+
+# Compiled plugin tools (generated at runtime by esbuild)
+tools/*.js
+
+# Scripts containing inline secrets
+mock-boot.sh
+
+# Personal / non-project files
+yc_session_highlights.md
+PHANTOM-SPEC.md
+
+# WSL utility scripts (environment-specific)
+wsl-*.sh
+
+# Claude Code local settings
+.claude/settings.local.json
+.claude/scheduled_tasks.lock
+.claude/plans/
+
+# OS files
+.DS_Store
+Thumbs.db

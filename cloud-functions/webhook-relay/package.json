@@ -1,0 +1,20 @@
+{
+  "name": "hiram-webhook-relay",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "functions-framework --target=webhookRelay --source=dist/"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "@google-cloud/functions-framework": "^3.4.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0",
+    "@types/node": "^22.0.0"
+  }
+}

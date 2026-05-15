@@ -1,0 +1,207 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "title": "API Token Usage",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "targets": [
+        { "expr": "rate(hiram_api_tokens_in[5m])", "legendFormat": "Tokens In / sec" },
+        { "expr": "rate(hiram_api_tokens_out[5m])", "legendFormat": "Tokens Out / sec" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "fillOpacity": 20, "lineWidth": 2 },
+          "unit": "short"
+        }
+      }
+    },
+    {
+      "title": "API Calls & Errors",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "targets": [
+        { "expr": "rate(hiram_api_calls[5m])", "legendFormat": "Calls / sec" },
+        { "expr": "rate(hiram_api_errors[5m])", "legendFormat": "Errors / sec" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "fillOpacity": 10, "lineWidth": 2 },
+          "unit": "short"
+        }
+      }
+    },
+    {
+      "title": "API Latency (p50 / p95 / p99)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "targets": [
+        { "expr": "hiram_api_latency_ms{quantile=\"0.5\"}", "legendFormat": "p50" },
+        { "expr": "hiram_api_latency_ms{quantile=\"0.95\"}", "legendFormat": "p95" },
+        { "expr": "hiram_api_latency_ms{quantile=\"0.99\"}", "legendFormat": "p99" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "fillOpacity": 10, "lineWidth": 2 },
+          "unit": "ms"
+        }
+      }
+    },
+    {
+      "title": "Token Totals",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 8 },
+      "targets": [
+        { "expr": "hiram_api_tokens_in", "legendFormat": "Tokens In (total)" },
+        { "expr": "hiram_api_tokens_out", "legendFormat": "Tokens Out (total)" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short", "thresholds": { "steps": [{ "value": 0, "color": "green" }, { "value": 10000000, "color": "yellow" }, { "value": 50000000, "color": "red" }] } } }
+    },
+    {
+      "title": "API Error Rate (%)",
+      "type": "gauge",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 8 },
+      "targets": [
+        { "expr": "rate(hiram_api_errors[5m]) / rate(hiram_api_calls[5m]) * 100", "legendFormat": "Error %" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100, "thresholds": { "steps": [{ "value": 0, "color": "green" }, { "value": 5, "color": "yellow" }, { "value": 20, "color": "red" }] } } }
+    },
+    {
+      "title": "Worker Spawns",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+      "targets": [
+        { "expr": "rate(hiram_worker_spawns[5m])", "legendFormat": "Total spawns / sec" },
+        { "expr": "rate(hiram_worker_errors[5m])", "legendFormat": "Worker errors / sec" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "fillOpacity": 15, "lineWidth": 2 },
+          "unit": "short"
+        }
+      }
+    },
+    {
+      "title": "Worker Duration (p50 / p95)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+      "targets": [
+        { "expr": "hiram_worker_duration_ms{quantile=\"0.5\"}", "legendFormat": "p50" },
+        { "expr": "hiram_worker_duration_ms{quantile=\"0.95\"}", "legendFormat": "p95" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "ms", "color": { "mode": "palette-classic" }, "custom": { "fillOpacity": 10, "lineWidth": 2 } } }
+    },
+    {
+      "title": "Webhook Events",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 20 },
+      "targets": [
+        { "expr": "rate(hiram_webhook_events[5m])", "legendFormat": "Events / sec" },
+        { "expr": "rate(hiram_webhook_errors[5m])", "legendFormat": "Errors / sec" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short", "color": { "mode": "palette-classic" }, "custom": { "fillOpacity": 15, "lineWidth": 2 } } }
+    },
+    {
+      "title": "Webhook Processing Latency",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 20 },
+      "targets": [
+        { "expr": "hiram_webhook_processing_ms{quantile=\"0.5\"}", "legendFormat": "p50" },
+        { "expr": "hiram_webhook_processing_ms{quantile=\"0.95\"}", "legendFormat": "p95" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "ms", "color": { "mode": "palette-classic" }, "custom": { "fillOpacity": 10, "lineWidth": 2 } } }
+    },
+    {
+      "title": "Warden Tickets Processed",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 28 },
+      "targets": [
+        { "expr": "hiram_warden_tickets_processed", "legendFormat": "Tickets" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short", "color": { "mode": "thresholds" }, "thresholds": { "steps": [{ "value": 0, "color": "blue" }] } } }
+    },
+    {
+      "title": "Warden Ticket Errors",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 28 },
+      "targets": [
+        { "expr": "hiram_warden_ticket_errors", "legendFormat": "Errors" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short", "color": { "mode": "thresholds" }, "thresholds": { "steps": [{ "value": 0, "color": "green" }, { "value": 1, "color": "red" }] } } }
+    },
+    {
+      "title": "Warden Ticket Duration (p50 / p95)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 28 },
+      "targets": [
+        { "expr": "hiram_warden_ticket_duration_ms{quantile=\"0.5\"}", "legendFormat": "p50" },
+        { "expr": "hiram_warden_ticket_duration_ms{quantile=\"0.95\"}", "legendFormat": "p95" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "ms", "color": { "mode": "palette-classic" }, "custom": { "fillOpacity": 10, "lineWidth": 2 } } }
+    },
+    {
+      "title": "System Memory",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 36 },
+      "targets": [
+        { "expr": "hiram_system_memory_rss_mb", "legendFormat": "RSS (MB)" },
+        { "expr": "hiram_system_memory_heap_mb", "legendFormat": "Heap (MB)" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "decmbytes", "color": { "mode": "palette-classic" }, "custom": { "fillOpacity": 20, "lineWidth": 2 } } }
+    },
+    {
+      "title": "System Uptime",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 36 },
+      "targets": [
+        { "expr": "hiram_system_uptime_s", "legendFormat": "Uptime" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s", "color": { "mode": "thresholds" }, "thresholds": { "steps": [{ "value": 0, "color": "green" }] } } }
+    },
+    {
+      "title": "Plugin Call Rates (Top 10)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 44 },
+      "targets": [
+        { "expr": "topk(10, rate({__name__=~\"hiram_plugin_.*_calls\"}[5m]))", "legendFormat": "{{__name__}}" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short", "color": { "mode": "palette-classic" }, "custom": { "fillOpacity": 10, "lineWidth": 2 } } }
+    },
+    {
+      "title": "Plugin Error Rates (Top 10)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 44 },
+      "targets": [
+        { "expr": "topk(10, rate({__name__=~\"hiram_plugin_.*_errors\"}[5m]))", "legendFormat": "{{__name__}}" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short", "color": { "mode": "palette-classic" }, "custom": { "fillOpacity": 10, "lineWidth": 2 } } }
+    },
+    {
+      "title": "Worker Spawns by Type",
+      "type": "piechart",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 40 },
+      "targets": [
+        { "expr": "{__name__=~\"hiram_worker_spawns_by_type_.*\"}", "legendFormat": "{{__name__}}" }
+      ],
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" } } }
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": ["hiram", "autonomous", "agents"],
+  "templating": { "list": [] },
+  "time": { "from": "now-6h", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "HIRAM — Autonomous Agent System",
+  "uid": "hiram-main",
+  "version": 1
+}

@@ -1,0 +1,27 @@
+[Unit]
+Description=HIRAM Autonomous Agent System
+After=network.target redis-server.service
+Requires=redis-server.service
+
+[Service]
+Type=simple
+User=hiram
+WorkingDirectory=/opt/hiram
+ExecStart=/usr/bin/node dist/daemon.js
+Restart=always
+RestartSec=5
+Environment=NODE_ENV=production
+
+# Load environment from file
+EnvironmentFile=/opt/hiram/.env
+
+# Allow enough file descriptors for many child processes
+LimitNOFILE=65536
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=hiram
+
+[Install]
+WantedBy=multi-user.target

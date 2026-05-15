@@ -1,0 +1,41 @@
+{
+  "name": "hiram",
+  "version": "0.1.0",
+  "description": "Autonomous multi-agent system for managing a portfolio of online services",
+  "type": "module",
+  "main": "dist/daemon.js",
+  "bin": {
+    "hiram": "dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/daemon.js",
+    "dev": "tsx src/daemon.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "vitest run --config vitest.config.e2e.ts"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.91.0",
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "better-sqlite3": "^12.9.0",
+    "dotenv": "^17.4.2",
+    "esbuild": "^0.28.0",
+    "googleapis": "^171.4.0",
+    "ioredis": "^5.10.1",
+    "node-cron": "^4.2.1",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^25.6.0",
+    "@types/node-cron": "^3.0.11",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.5"
+  }
+}
